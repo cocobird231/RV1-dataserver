@@ -1,0 +1,57 @@
+#ver=2.0
+---
+topic_monitor:
+    msg_filter : ["vehicle_interfaces", "sensor_msgs"] # Filter scanned topics according to message type.
+    scan_period_ms : 1000.0 # Scan topics in every _ms.
+
+msg_record:
+    sampling_period_ms : 10.0 # Sampling messages in every _ms.
+    dump_period_s : 60.0 # Dump files in every _s.
+    countdown_duration_s : -1.0 # Stop record after _s. Non-stop if value < 0.
+    img_threads : 4 # Number of Image saving threads.
+    gnd_threads : 1 # Number of GroundDetect saving threads.
+    dump_path : "datalog"
+    enable_control : False # True if data server controlled by gui.
+
+# Init params for controlled by gui service.
+# Only the rest of params under control_setting can be valid controlled.
+control_setting:
+    enable_monitor : False # Enable topic scanning. Will be set only if gui controlled.
+    enable_countdown : False # Enable record countdown. Will be set only if gui controlled.
+    scan_period_ms : 1000.0 # Scan topics in every _ms.
+    sampling_period_ms : 10.0 # Sampling messages in every _ms.
+    dump_period_s : 60.0 # Dump files in every _s.
+    countdown_duration_s : -1.0 # Stop record after _s. Non-stop if value < 0.
+
+# Settings for Params class under vehicle_interfaces/params.h
+generic_prop:
+    # Node name and namespace. The namespace will automatically adding prefix at node name, topic name, service name, etc..
+    namespace : "V0"
+    nodeName : "dataserver"
+
+    # Device ID, the ID will automatically formed the name of nodes and publisher topics. For instance, 
+    # the node name will be formed as "<nodeName>_<id>_node", and the publisher topic name will be formed as "<topic_name>_<id>". 
+    # Note: If the topic use to be subscriptions, then the topic name will not be formed.
+    id : 0
+
+    # ################################################################################################
+    # The rest of params will not be used. Change the following params under service.json instead.
+    # ################################################################################################
+
+    # Device information service configuration
+    devInfoService : "devinfo_0" # Service name devinfo_0
+    devInterface : "eth0" # eth0
+    devMultiNode : True # False
+
+    # QoS service configuration
+    qosService : "qos_0" # Service name qos_0
+    qosDirPath : "launch/qos"
+
+    # Safety service configuration
+    safetyService : "" # Service name safety_0
+
+    # Time sync service configuration
+    timesyncService : "timesync_0" # Service name timesync_0
+    timesyncPeriod_ms : 600000.0 # 10 minute a sync for HPC. 2 minute a sync for sensors.
+    timesyncAccuracy_ms : 2.0 # Restrict the duration of sync process time
+    timesyncWaitService : False # Wait until time synced at construction.

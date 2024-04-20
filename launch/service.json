@@ -1,0 +1,15 @@
+{
+    "devInfoService" : "devinfo_0", 
+    "devInterface" : "enp2s0", 
+    "devMultiNode" : true, 
+
+    "qosService" : "qos_0", 
+    "qosDirPath" : "launch/qos", 
+
+    "safetyService" : "", 
+
+    "timesyncService" : "timesync_0", 
+    "timesyncPeriod_ms" : 600000.0, 
+    "timesyncAccuracy_ms" : 2.0, 
+    "timesyncWaitService" : false
+}
