@@ -8,7 +8,7 @@ int main(int argc, char * argv[])
         auto tmp = std::make_shared<Params>("tmp_dataserver_params_node");
         params = std::make_shared<Params>(tmp->nodeName + "_params");
         std::cout << "scan_period_ms: " << params->scan_period_ms << std::endl;
-        std::cout << "sampling_period_ms: " << params->sampling_period_ms << std::endl;
+        std::cout << "sample_period_ms: " << params->sample_period_ms << std::endl;
         std::cout << "dump_period_s: " << params->dump_period_s << std::endl;
         std::cout << "countdown_duration_s: " << params->countdown_duration_s << std::endl;
     }

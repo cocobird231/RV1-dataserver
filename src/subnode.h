@@ -24,8 +24,7 @@
 
 class BaseSubNode;
 
-void StartBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node);
-void StopBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node);
+void SetBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node, bool flag);
 
 class BaseSubNode : public rclcpp::Node
 {
@@ -33,8 +32,7 @@ private:
     std::shared_ptr<BaseRecordMsg> rMsg_;
     std::mutex msgMtx_;
 
-    friend void StartBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node);
-    friend void StopBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node);
+    friend void SetBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node, bool flag);
 
 protected:
     rclcpp::SubscriptionBase::SharedPtr sub_;
@@ -48,7 +46,7 @@ public:
 protected:
     BaseSubNode(const std::string& nodeName, const std::string& topicName) : 
         rclcpp::Node(nodeName), 
-        recordF_(true), 
+        recordF_(false), 
         nodeName(nodeName), 
         topicName(topicName) {}
 
@@ -135,12 +133,7 @@ public:
     }
 };
 
-void StartBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node)
+void SetBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node, bool flag)
 {
-    node->recordF_ = true;
-}
-
-void StopBaseSubNodeRecord(std::shared_ptr<BaseSubNode> node)
-{
-    node->recordF_ = false;
+    node->recordF_ = flag;
 }

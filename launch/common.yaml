@@ -5,23 +5,29 @@ topic_monitor:
     scan_period_ms : 1000.0 # Scan topics in every _ms.
 
 msg_record:
-    sampling_period_ms : 10.0 # Sampling messages in every _ms.
+    sample_period_ms : 10.0 # Sampling messages in every _ms.
     dump_period_s : 60.0 # Dump files in every _s.
     countdown_duration_s : -1.0 # Stop record after _s. Non-stop if value < 0.
     img_threads : 4 # Number of Image saving threads.
     gnd_threads : 1 # Number of GroundDetect saving threads.
     dump_path : "datalog"
-    enable_control : False # True if data server controlled by gui.
+    enable_control : True # True if data server controlled by gui.
 
 # Init params for controlled by gui service.
-# Only the rest of params under control_setting can be valid controlled.
+# Only the params under control_setting can be modified by gui.
 control_setting:
-    enable_monitor : False # Enable topic scanning. Will be set only if gui controlled.
+    enable_scan : True # Enable topic scanning. Will be set only if gui controlled.
+    enable_sample : True # Enable message sampling. Will be set only if gui controlled.
+    enable_dump : True # Enable file dumping. Will be set only if gui controlled.
     enable_countdown : False # Enable record countdown. Will be set only if gui controlled.
     scan_period_ms : 1000.0 # Scan topics in every _ms.
-    sampling_period_ms : 10.0 # Sampling messages in every _ms.
+    sample_period_ms : 10.0 # Sampling messages in every _ms.
     dump_period_s : 60.0 # Dump files in every _s.
     countdown_duration_s : -1.0 # Stop record after _s. Non-stop if value < 0.
+
+# Service properties
+service_prop:
+    serviceName : "dataserver" # The _id number will added in suffix, i.e. "<serviceName>_<id>"
 
 # Settings for Params class under vehicle_interfaces/params.h
 generic_prop:

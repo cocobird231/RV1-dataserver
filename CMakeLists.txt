@@ -47,9 +47,13 @@ target_link_libraries(sub
   ${OpenCV_LIBRARIES}
 )
 
+add_executable(control src/control.cpp)
+ament_target_dependencies(control rclcpp vehicle_interfaces sensor_msgs)
+
 ## Install
 install(TARGETS
   sub
+  control
   DESTINATION lib/${PROJECT_NAME}
 )
 
