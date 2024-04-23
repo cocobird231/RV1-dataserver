@@ -116,10 +116,19 @@ public:
 template <typename msgT, typename rmsgT, typename smsgT>
 class SaveQueueSubNode : public BaseSubNode
 {
+private:
+    const fs::path outputDirPath_;
+
 public:
     SaveQueueSubNode(const std::string nodeName, const std::string topicName, std::shared_ptr<SaveQueue<smsgT> > saveQueue, const fs::path outputDirPath) : 
-        BaseSubNode(nodeName, topicName)
+        BaseSubNode(nodeName, topicName), 
+        outputDirPath_(outputDirPath / nodeName)
     {
+        {// Create output directory for save queue.
+            if (!fs::exists(this->outputDirPath_))
+                fs::create_directories(this->outputDirPath_);
+        }
+
         this->sub_ = this->create_subscription<msgT>(this->topicName, 10, 
             [this, saveQueue, outputDirPath](const std::shared_ptr<msgT> msg)
             {
@@ -128,7 +137,7 @@ public:
                 RecordMsgHeader rHd;
                 rHd.record_stamp = this->get_clock()->now().seconds();
                 rHd.record_frame_id = this->msgCnt_++;
-                this->setRecordMsg(std::move(make_record_msg_3<msgT, rmsgT, smsgT>(rHd, msg, saveQueue, outputDirPath / this->nodeName)));
+                this->setRecordMsg(std::move(make_record_msg_3<msgT, rmsgT, smsgT>(rHd, msg, saveQueue, this->outputDirPath_)));
             });
     }
 };
