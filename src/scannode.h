@@ -17,6 +17,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 
+#include "vehicle_interfaces/msg_json.h"
 #include "vehicle_interfaces/timer.h"
 #include "vehicle_interfaces/utils.h"
 #include "vehicle_interfaces/vehicle_interfaces.h"
@@ -49,15 +50,6 @@ public:
     std::string dump_path;
     bool enable_control = false;
 
-    bool control_enable_scan = true;
-    bool control_enable_sample = true;
-    bool control_enable_dump = true;
-    bool control_enable_countdown = false;
-    double control_scan_period_ms = 1000.0;
-    double control_sample_period_ms = 10.0;
-    double control_dump_period_s = 60.0;
-    double control_countdown_duration_s = -1.0;
-
     std::string serviceName = "dataserver";
 
 private:
@@ -72,15 +64,6 @@ private:
         this->get_parameter("gnd_threads", this->gnd_threads);
         this->get_parameter("dump_path", this->dump_path);
         this->get_parameter("enable_control", this->enable_control);
-
-        this->get_parameter("control_enable_scan", this->control_enable_scan);
-        this->get_parameter("control_enable_sample", this->control_enable_sample);
-        this->get_parameter("control_enable_dump", this->control_enable_dump);
-        this->get_parameter("control_enable_countdown", this->control_enable_countdown);
-        this->get_parameter("control_scan_period_ms", this->control_scan_period_ms);
-        this->get_parameter("control_sample_period_ms", this->control_sample_period_ms);
-        this->get_parameter("control_dump_period_s", this->control_dump_period_s);
-        this->get_parameter("control_countdown_duration_s", this->control_countdown_duration_s);
 
         this->get_parameter("serviceName", this->serviceName);
     }
@@ -124,15 +107,6 @@ public:
         this->declare_parameter<std::string>("dump_path", this->dump_path);
         this->declare_parameter<bool>("enable_control", this->enable_control);
 
-        this->declare_parameter<bool>("control_enable_scan", this->control_enable_scan);
-        this->declare_parameter<bool>("control_enable_sample", this->control_enable_sample);
-        this->declare_parameter<bool>("control_enable_dump", this->control_enable_dump);
-        this->declare_parameter<bool>("control_enable_countdown", this->control_enable_countdown);
-        this->declare_parameter<double>("control_scan_period_ms", this->control_scan_period_ms);
-        this->declare_parameter<double>("control_sample_period_ms", this->control_sample_period_ms);
-        this->declare_parameter<double>("control_dump_period_s", this->control_dump_period_s);
-        this->declare_parameter<double>("control_countdown_duration_s", this->control_countdown_duration_s);
-
         this->declare_parameter<std::string>("serviceName", this->serviceName);
 
         this->_getParams();
@@ -148,6 +122,9 @@ public:
 };
 
 
+/**
+ * @brief Record message tag. The structure tags the `BaseRecordMsg` with a timestamp and the topic name while sampling.
+ */
 struct RecordMsgTag
 {
     double ts;// Timestamp.
@@ -158,7 +135,8 @@ struct RecordMsgTag
 class ScanNode : public rclcpp::Node
 {
 private:
-    std::shared_ptr<Params> params_;
+    const std::shared_ptr<Params> params_;
+    vehicle_interfaces::msg::DataServerStatus status_;
     fs::path dumpDirPath_;// Working directory for dumping files.
 
     /**
@@ -209,6 +187,10 @@ private:
     rclcpp::Service<vehicle_interfaces::srv::DataServer>::SharedPtr statusSrv_;// Data server service.
 
 private:
+    /**
+     * @brief Timer callback function for the scan timer.
+     * @note The function scans the topics and creates subnodes for the topics.
+     */
     void _scanTmCbFunc()
     {
         // Search topics
@@ -307,6 +289,10 @@ private:
         }
     }
 
+    /**
+     * @brief Timer callback function for the sample timer.
+     * @note The function samples the record messages from the subnodes.
+     */
     void _sampleTmCbFunc()
     {
         std::lock_guard<std::mutex> recordMsgsLk(this->recordMsgsMtx_);
@@ -323,16 +309,28 @@ private:
         }
     }
 
+    /**
+     * @brief Timer callback function for the dump timer.
+     * @note The function dumps the record messages to a JSON file.
+     */
     void _dumpTmCbFunc()
     {
         this->_dumpJSON();
     }
 
+    /**
+     * @brief Timer callback function for the countdown timer.
+     * @note The function stops the record.
+     */
     void _countdownTmCbFunc()
     {
         this->stopRecord();
     }
 
+    /**
+     * @brief Dump the record messages to a JSON file.
+     * @note The function swaps the record message queue and dumps the record messages to a JSON file.
+     */
     void _dumpJSON()
     {
         std::lock_guard<std::mutex> dumpLk(this->dumpMtx_);
@@ -369,228 +367,187 @@ private:
         RCLCPP_INFO(this->get_logger(), "[ScanNode::_dumpJSON] JSON dumped. Time: %.3f s", this->get_clock()->now().seconds() - st);
     }
 
+    /**
+     * Service callback function for the data server.
+     * The function handles the control of the scan, sample, dump, and countdown timers.
+     * The function returns the status of the timers.
+     * @param[in] request Request message.
+     * @param[out] response Response message.
+     * @note The function is using the recordStatusMtx_ to lock the record flag and timers.
+     */
     void _statusSrvCbFunc(const std::shared_ptr<vehicle_interfaces::srv::DataServer::Request> request, 
                             std::shared_ptr<vehicle_interfaces::srv::DataServer::Response> response)
     {
         const auto& req = request->request;
-        auto& res = response->status;
         response->response = true;
-    
+
         switch (req.server_action)
         {
             case vehicle_interfaces::msg::DataServerStatus::SERVER_ACTION_STOP:
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->scanTm_)
-                        this->params_->control_enable_scan = false;
-                    if (this->sampleTm_)
-                        this->params_->control_enable_sample = false;
-                    if (this->dumpTm_)
-                        this->params_->control_enable_dump = false;
-                    if (this->countdownTm_)
-                        this->params_->control_enable_countdown = false;
-                }
                 this->stopRecord();
                 break;
 
             case vehicle_interfaces::msg::DataServerStatus::SERVER_ACTION_START:
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->scanTm_)
-                        this->params_->control_enable_scan = true;
-                    if (this->sampleTm_)
-                        this->params_->control_enable_sample = true;
-                    if (this->dumpTm_)
-                        this->params_->control_enable_dump = true;
-                    if (this->countdownTm_)
-                        this->params_->control_enable_countdown = true;
-                }
                 this->startRecord();
                 break;
 
             case vehicle_interfaces::msg::DataServerStatus::SERVER_ACTION_SET_TIMER:
-                // Scan timer.
-                if (req.server_scan_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
                 {
                     std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_scan = true;
-                    if (this->scanTm_)
-                        this->scanTm_->start();
-                    else
+                    // Scan timer.
+                    if (req.server_scan_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
                     {
-                        if (this->params_->control_scan_period_ms > 0)
+                        if (this->status_.server_scan_period_ms > 0)
                         {
-                            this->scanTm_ = vehicle_interfaces::make_unique_timer(this->params_->control_scan_period_ms, std::bind(&ScanNode::_scanTmCbFunc, this));
+                            if (!this->scanTm_)
+                                this->scanTm_ = vehicle_interfaces::make_unique_timer(this->status_.server_scan_period_ms, std::bind(&ScanNode::_scanTmCbFunc, this));
                             this->scanTm_->start();
+                            this->status_.server_scan_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
                         }
                         else
                         {
-                            this->params_->control_enable_scan = false;
                             response->response = false;
                             response->reason = "Invalid scan period!";
+                            this->status_.server_scan_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
                         }
                     }
-                }
-                else if (req.server_scan_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_scan = false;
-                    if (this->scanTm_)
-                        this->scanTm_->stop();
-                }
-
-                // Sample timer.
-                if (req.server_sample_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_sample = true;
-                    if (this->sampleTm_)
-                        this->sampleTm_->start();
-                    else
+                    else if (req.server_scan_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
                     {
-                        if (this->params_->control_sample_period_ms > 0)
+                        if (this->scanTm_)
+                            this->scanTm_->stop();
+                        this->status_.server_scan_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+                    }
+
+                    // Sample timer.
+                    if (req.server_sample_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
+                    {
+                        if (this->status_.server_sample_period_ms > 0)
                         {
-                            this->sampleTm_ = vehicle_interfaces::make_unique_timer(this->params_->control_sample_period_ms, std::bind(&ScanNode::_sampleTmCbFunc, this));
+                            if (!this->sampleTm_)
+                                this->sampleTm_ = vehicle_interfaces::make_unique_timer(this->status_.server_sample_period_ms, std::bind(&ScanNode::_sampleTmCbFunc, this));
                             this->sampleTm_->start();
+                            this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
                         }
                         else
                         {
-                            this->params_->control_enable_sample = false;
                             response->response = false;
                             response->reason = "Invalid sample period!";
+                            this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
                         }
                     }
-                }
-                else if (req.server_sample_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_sample = false;
-                    if (this->sampleTm_)
-                        this->sampleTm_->stop();
-                }
-
-                // Dump timer.
-                if (req.server_dump_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_dump = true;
-                    if (this->dumpTm_)
-                        this->dumpTm_->start();
-                    else
+                    else if (req.server_sample_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
                     {
-                        if (this->params_->control_dump_period_s > 0)
+                        if (this->sampleTm_)
+                            this->sampleTm_->stop();
+                        this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+                    }
+
+                    // Dump timer.
+                    if (req.server_dump_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
+                    {
+                        if (this->status_.server_dump_period_ms > 0)
                         {
-                            this->dumpTm_ = vehicle_interfaces::make_unique_timer(this->params_->control_dump_period_s * 1000.0, std::bind(&ScanNode::_dumpTmCbFunc, this));
+                            if (!this->dumpTm_)
+                                this->dumpTm_ = vehicle_interfaces::make_unique_timer(this->status_.server_dump_period_ms, std::bind(&ScanNode::_dumpTmCbFunc, this));
                             this->dumpTm_->start();
+                            this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
                         }
                         else
                         {
-                            this->params_->control_enable_dump = false;
                             response->response = false;
                             response->reason = "Invalid dump period!";
+                            this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
                         }
                     }
-                }
-                else if (req.server_dump_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_dump = false;
-                    if (this->dumpTm_)
-                        this->dumpTm_->stop();
-                }
-
-                // Countdown timer.
-                if (req.server_countdown_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_countdown = true;
-                    if (this->countdownTm_)
-                        this->countdownTm_->start();
-                    else
+                    else if (req.server_dump_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
                     {
-                        if (this->params_->control_countdown_duration_s > 0)
+                        if (this->dumpTm_)
+                            this->dumpTm_->stop();
+                        this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+                    }
+
+                    // Countdown timer.
+                    if (req.server_countdown_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START)
+                    {
+                        if (this->status_.server_countdown_period_ms > 0)
                         {
-                            this->countdownTm_ = vehicle_interfaces::make_unique_timer(this->params_->control_countdown_duration_s * 1000.0, std::bind(&ScanNode::_countdownTmCbFunc, this));
+                            if (!this->countdownTm_)
+                                this->countdownTm_ = vehicle_interfaces::make_unique_timer(this->status_.server_countdown_period_ms, std::bind(&ScanNode::_countdownTmCbFunc, this));
                             this->countdownTm_->start();
+                            this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
                         }
                         else
                         {
-                            this->params_->control_enable_countdown = false;
                             response->response = false;
-                            response->reason = "Invalid countdown duration!";
+                            response->reason = "Invalid countdown period!";
+                            this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
                         }
                     }
-                }
-                else if (req.server_countdown_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    this->params_->control_enable_countdown = false;
-                    if (this->countdownTm_)
-                        this->countdownTm_->stop();
+                    else if (req.server_countdown_timer_status == vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP)
+                    {
+                        if (this->countdownTm_)
+                            this->countdownTm_->stop();
+                        this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+                    }
                 }
                 break;
 
             case vehicle_interfaces::msg::DataServerStatus::SERVER_ACTION_SET_PERIOD:
-                // Scan period.
-                if (req.server_scan_period_ms > 0)
                 {
                     std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->scanTm_)
-                        this->scanTm_->setPeriod(req.server_scan_period_ms);
-                    else
-                        this->scanTm_ = vehicle_interfaces::make_unique_timer(req.server_scan_period_ms, std::bind(&ScanNode::_scanTmCbFunc, this));
-                    this->params_->control_scan_period_ms = req.server_scan_period_ms;
-                }
+                    // Scan period.
+                    if (req.server_scan_period_ms > 0)
+                    {
+                        if (this->scanTm_)
+                            this->scanTm_->setPeriod(req.server_scan_period_ms);
+                        else
+                            this->scanTm_ = vehicle_interfaces::make_unique_timer(req.server_scan_period_ms, std::bind(&ScanNode::_scanTmCbFunc, this));
+                        this->status_.server_scan_period_ms = req.server_scan_period_ms;
+                    }
 
-                // Sample period.
-                if (req.server_sample_period_ms > 0)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->sampleTm_)
-                        this->sampleTm_->setPeriod(req.server_sample_period_ms);
-                    else
-                        this->sampleTm_ = vehicle_interfaces::make_unique_timer(req.server_sample_period_ms, std::bind(&ScanNode::_sampleTmCbFunc, this));
-                    this->params_->control_sample_period_ms = req.server_sample_period_ms;
-                }
+                    // Sample period.
+                    if (req.server_sample_period_ms > 0)
+                    {
+                        if (this->sampleTm_)
+                            this->sampleTm_->setPeriod(req.server_sample_period_ms);
+                        else
+                            this->sampleTm_ = vehicle_interfaces::make_unique_timer(req.server_sample_period_ms, std::bind(&ScanNode::_sampleTmCbFunc, this));
+                        this->status_.server_sample_period_ms = req.server_sample_period_ms;
+                    }
 
-                // Dump period.
-                if (req.server_dump_period_ms > 0)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->dumpTm_)
-                        this->dumpTm_->setPeriod(req.server_dump_period_ms);
-                    else
-                        this->dumpTm_ = vehicle_interfaces::make_unique_timer(req.server_dump_period_ms, std::bind(&ScanNode::_dumpTmCbFunc, this));
-                    this->params_->control_dump_period_s = req.server_dump_period_ms / 1000.0;
-                }
+                    // Dump period.
+                    if (req.server_dump_period_ms > 0)
+                    {
+                        if (this->dumpTm_)
+                            this->dumpTm_->setPeriod(req.server_dump_period_ms);
+                        else
+                            this->dumpTm_ = vehicle_interfaces::make_unique_timer(req.server_dump_period_ms, std::bind(&ScanNode::_dumpTmCbFunc, this));
+                        this->status_.server_dump_period_ms = req.server_dump_period_ms;
+                    }
 
-                // Countdown duration.
-                if (req.server_countdown_period_ms > 0)
-                {
-                    std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
-                    if (this->countdownTm_)
-                        this->countdownTm_->setPeriod(req.server_countdown_period_ms);
-                    else
-                        this->countdownTm_ = vehicle_interfaces::make_unique_timer(req.server_countdown_period_ms, std::bind(&ScanNode::_countdownTmCbFunc, this));
-                    this->params_->control_countdown_duration_s = req.server_countdown_period_ms / 1000.0;
+                    // Countdown duration.
+                    if (req.server_countdown_period_ms > 0)
+                    {
+                        if (this->countdownTm_)
+                            this->countdownTm_->setPeriod(req.server_countdown_period_ms);
+                        else
+                            this->countdownTm_ = vehicle_interfaces::make_unique_timer(req.server_countdown_period_ms, std::bind(&ScanNode::_countdownTmCbFunc, this));
+                        this->status_.server_countdown_period_ms = req.server_countdown_period_ms;
+                    }
                 }
                 break;
             default:
                 break;
         }
-
-        // Response.
-        res.server_scan_timer_status = this->params_->control_enable_scan ? vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START : vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
-        res.server_sample_timer_status = this->params_->control_enable_sample ? vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START : vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
-        res.server_dump_timer_status = this->params_->control_enable_dump ? vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START : vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
-        res.server_countdown_timer_status = this->params_->control_enable_countdown ? vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START : vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
-        res.server_scan_period_ms = this->params_->control_scan_period_ms;
-        res.server_sample_period_ms = this->params_->control_sample_period_ms;
-        res.server_dump_period_ms = this->params_->control_dump_period_s * 1000.0;
-        res.server_countdown_period_ms = this->params_->control_countdown_duration_s * 1000.0;
+        response->status = this->status_;
+        std::cout << vehicle_interfaces::msg_show::DataServerStatus::hprint(this->status_) << std::endl;
     }
 
 public:
+    /**
+     * @brief ScanNode constructor.
+     * @param[in] params Parameters.
+     */
     ScanNode(const std::shared_ptr<Params> params) : 
         rclcpp::Node(params->nodeName), 
         params_(params), 
@@ -607,10 +564,19 @@ public:
                 fs::create_directories(this->dumpDirPath_ / "json");
         }
 
+        this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        this->status_.server_scan_period_ms = params->scan_period_ms;
+        this->status_.server_sample_period_ms = params->sample_period_ms;
+        this->status_.server_dump_period_ms = params->dump_period_s * 1000.0;
+        this->status_.server_countdown_period_ms = params->countdown_duration_s * 1000.0;
+
         if (params->scan_period_ms > 0.0)
         {
             this->scanTm_ = vehicle_interfaces::make_unique_timer(params->scan_period_ms, std::bind(&ScanNode::_scanTmCbFunc, this));
             this->scanTm_->start();
+            this->status_.server_scan_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
         }
         if (params->sample_period_ms > 0.0)
             this->sampleTm_ = vehicle_interfaces::make_unique_timer(params->sample_period_ms, std::bind(&ScanNode::_sampleTmCbFunc, this));
@@ -636,6 +602,11 @@ public:
         this->subNodeThMap_.clear();
     }
 
+    /**
+     * @brief Start the record.
+     * @note The function starts the scan, sample, dump, and countdown timers.
+     * @note The function is using the recordStatusMtx_ to lock the record flag and timers.
+     */
     void startRecord()
     {
         std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
@@ -644,19 +615,34 @@ public:
         this->recordF_ = true;
 
         if (this->sampleTm_)
+        {
             this->sampleTm_->start();
+            this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
+        }
         if (this->dumpTm_)
+        {
             this->dumpTm_->start();
+            this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
+        }
         if (this->countdownTm_)
+        {
             this->countdownTm_->start();
+            this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_START;
+        }
 
         {// Enable record for all subnodes. For SaveQueueSubNode, set the output directory path.
             std::lock_guard<std::mutex> subNodesLk(this->subNodesMtx_);
             for (auto& [topicName, subNode] : this->subNodes_)
                 SetBaseSubNodeRecord(subNode, true);
         }
+        RCLCPP_INFO(this->get_logger(), "[ScanNode::startRecord] Record started.");
     }
 
+    /**
+     * @brief Stop the record.
+     * @note The function stops the scan, sample, dump, and countdown timers.
+     * @note The function is using the recordStatusMtx_ to lock the record flag and timers.
+     */
     void stopRecord()
     {
         std::lock_guard<std::mutex> lk(this->recordStatusMtx_);
@@ -671,12 +657,22 @@ public:
         }
 
         if (this->sampleTm_)
+        {
             this->sampleTm_->stop();
+            this->status_.server_sample_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        }
         if (this->dumpTm_)
+        {
             this->dumpTm_->stop();
+            this->status_.server_dump_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        }
         if (this->countdownTm_)
+        {
             this->countdownTm_->stop();
+            this->status_.server_countdown_timer_status = vehicle_interfaces::msg::DataServerStatus::TIMER_STATUS_STOP;
+        }
 
         this->_dumpJSON();// Dump the last record messages.
+        RCLCPP_INFO(this->get_logger(), "[ScanNode::stopRecord] Record stopped.");
     }
 };

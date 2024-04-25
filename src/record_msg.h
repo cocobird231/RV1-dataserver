@@ -42,7 +42,7 @@ class BaseRecordMsg
 {
 private:
     RecordMsgHeader header_;
-    friend nlohmann::json BaseRecordMsgToJSON(const std::shared_ptr<BaseRecordMsg> rMsg);
+    friend nlohmann::json BaseRecordMsgToJSON(const std::shared_ptr<BaseRecordMsg> rMsg);// General function for all record messages.
 
 protected:
     BaseRecordMsg(RecordMsgHeader header) : header_(header) {}
@@ -68,6 +68,11 @@ public:
 /**
  * Self-defined record message type.
  */
+
+/**
+ * VI_ImageMsg.
+ * The message type for recording image messages without image data.
+ */
 struct VI_ImageMsg
 {
     vehicle_interfaces::msg::Header header;
@@ -84,7 +89,11 @@ struct VI_ImageMsg
 
 
 /**
- * make_record_msg function template for single message type.
+ * make_record_msg function template for single message type recording.
+ * @tparam msgT ROS2 message type.
+ * @param[in] header Record message header.
+ * @param[in] msg ROS2 message.
+ * @return Record message with ROS2 message type.
  */
 template <typename msgT>
 std::shared_ptr<RecordMsg<msgT> > make_record_msg(const RecordMsgHeader header, const std::shared_ptr<msgT> msg)
@@ -95,7 +104,13 @@ std::shared_ptr<RecordMsg<msgT> > make_record_msg(const RecordMsgHeader header, 
 
 
 /**
- * make_record_msg function template for ROS2 message type and self-defined record message type.
+ * make_record_msg_2 function template for ROS2 message type to self-defined record message type.
+ * @tparam msgT ROS2 message type.
+ * @tparam rmsgT Self-defined record message type.
+ * @param[in] header Record message header.
+ * @param[in] msg ROS2 message.
+ * @return Record message with self-defined record message type.
+ * @note This function needs to be implemented for each ROS2 message type to self-defined record message type conversion.
  */
 template <typename msgT, typename rmsgT>
 std::shared_ptr<RecordMsg<rmsgT> > make_record_msg_2(const RecordMsgHeader header, const std::shared_ptr<msgT> msg)
@@ -104,6 +119,20 @@ std::shared_ptr<RecordMsg<rmsgT> > make_record_msg_2(const RecordMsgHeader heade
     return nullptr;
 }
 
+
+
+/**
+ * make_record_msg_3 function template for ROS2 message type to self-defined record message type with specific data saving method.
+ * @tparam msgT ROS2 message type.
+ * @tparam rmsgT Self-defined record message type.
+ * @tparam smsgT Data type for saving.
+ * @param[in] header Record message header.
+ * @param[in] msg ROS2 message.
+ * @param[in] saveQueue SaveQueue object for saving data.
+ * @param[in] outputDir Output directory path.
+ * @return Record message with self-defined record message type.
+ * @note This function needs to be implemented for each ROS2 message type to self-defined record message type conversion with specific data saving method.
+ */
 template <typename msgT, typename rmsgT, typename smsgT>
 std::shared_ptr<RecordMsg<rmsgT> > make_record_msg_3(const RecordMsgHeader header, 
     const std::shared_ptr<msgT> msg, 
@@ -117,7 +146,11 @@ std::shared_ptr<RecordMsg<rmsgT> > make_record_msg_3(const RecordMsgHeader heade
 
 
 /**
- * Function template specialization.
+ * make_record_msg_3 function template specialization.
+ */
+
+/**
+ * make_record_msg_3 function template specialization for vehicle_interfaces::msg::Image to VI_ImageMsg.
  */
 template <>
 std::shared_ptr<RecordMsg<VI_ImageMsg> > make_record_msg_3(const RecordMsgHeader header, 

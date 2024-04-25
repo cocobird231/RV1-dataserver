@@ -37,6 +37,11 @@
 
 
 
+/**
+ * Convert vehicle_interfaces::msg::Header to JSON.
+ * @param[out] json output JSON object.
+ * @param[in] header vehicle_interfaces::msg::Header object.
+ */
 void VI_HeaderToJSON(nlohmann::json& json, const vehicle_interfaces::msg::Header& header)
 {
     json["priority"] = header.priority;
@@ -50,6 +55,14 @@ void VI_HeaderToJSON(nlohmann::json& json, const vehicle_interfaces::msg::Header
 }
 
 
+
+/**
+ * RecordMsgToJSON function template. Function called by BaseRecordMsgToJSON.
+ * @param[out] json output JSON object.
+ * @param[in] rMsg RecordMsg object.
+ * @tparam rmsgT RecordMsg message type.
+ * @note Function needs to be specialized for each message type.
+ */
 template<typename rmsgT>
 void RecordMsgToJSON(nlohmann::json& json, const std::shared_ptr<RecordMsg<rmsgT> > rMsg)
 {
@@ -61,6 +74,7 @@ void RecordMsgToJSON(nlohmann::json& json, const std::shared_ptr<RecordMsg<rmsgT
 /**
  * RecordMsgToJSON function specialization for vehicle_interfaces messages.
  */
+
 template<>
 void RecordMsgToJSON(nlohmann::json& json, const std::shared_ptr<RecordMsg<vehicle_interfaces::msg::Chassis> > rMsg)
 {
@@ -252,6 +266,12 @@ void RecordMsgToJSON(nlohmann::json& json, const std::shared_ptr<RecordMsg<VI_Im
 
 
 
+/**
+ * Convert BaseRecordMsg to JSON.
+ * @param[in] rMsg BaseRecordMsg object.
+ * @return JSON object.
+ * @note Function will call `RecordMsgToJSON` function determined by the type of `RecordMsg`
+ */
 nlohmann::json BaseRecordMsgToJSON(const std::shared_ptr<BaseRecordMsg> rMsg)
 {
     nlohmann::json json;

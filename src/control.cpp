@@ -9,7 +9,9 @@
 
 #include "rclcpp/rclcpp.hpp"
 
+#include "vehicle_interfaces/params.h"
 #include "vehicle_interfaces/utils.h"
+
 #include "vehicle_interfaces/msg/data_server_status.hpp"
 #include "vehicle_interfaces/srv/data_server.hpp"
 
@@ -20,46 +22,25 @@ using namespace std::chrono_literals;
 
 std::atomic<bool> __global_exit_flag = false;
 
-class Params : public rclcpp::Node
+class Params : public vehicle_interfaces::GenericParams
 {
 public:
-    bool control_enable_scan;
-    bool control_enable_sample;
-    bool control_enable_dump;
-    bool control_enable_countdown;
-    double control_scan_period_ms;
-    double control_sample_period_ms;
-    double control_dump_period_s;
-    double control_countdown_duration_s;
-    std::string serviceName;
-    std::string nodeName;
+    std::string serviceName = "dataserver_0";
+
+private:
+    void _getParams()
+    {
+        this->get_parameter("serviceName", this->serviceName);
+    }
 
 public:
-    Params(const std::string & node_name) : rclcpp::Node(node_name)
+    Params(std::string nodeName) : vehicle_interfaces::GenericParams(nodeName)
     {
-        declare_parameter("control_enable_scan", true);
-        declare_parameter("control_enable_sample", true);
-        declare_parameter("control_enable_dump", true);
-        declare_parameter("control_enable_countdown", true);
-        declare_parameter("control_scan_period_ms", 1000.0);
-        declare_parameter("control_sample_period_ms", 100.0);
-        declare_parameter("control_dump_period_s", 10.0);
-        declare_parameter("control_countdown_duration_s", 5.0);
-        declare_parameter("serviceName", SERVICE_NAME);
-        declare_parameter("nodeName", NODE_NAME);
-
-        get_parameter("control_enable_scan", control_enable_scan);
-        get_parameter("control_enable_sample", control_enable_sample);
-        get_parameter("control_enable_dump", control_enable_dump);
-        get_parameter("control_enable_countdown", control_enable_countdown);
-        get_parameter("control_scan_period_ms", control_scan_period_ms);
-        get_parameter("control_sample_period_ms", control_sample_period_ms);
-        get_parameter("control_dump_period_s", control_dump_period_s);
-        get_parameter("control_countdown_duration_s", control_countdown_duration_s);
-        get_parameter("serviceName", serviceName);
-        get_parameter("nodeName", nodeName);
+        this->declare_parameter<std::string>("serviceName", this->serviceName);
+        this->_getParams();
     }
 };
+
 
 
 vehicle_interfaces::ReasonResult<bool> SendRequest(std::string serviceName, vehicle_interfaces::srv::DataServer::Request::SharedPtr req, vehicle_interfaces::msg::DataServerStatus& dst)

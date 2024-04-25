@@ -38,15 +38,6 @@ def generate_launch_description():
                     "dump_path" : data['msg_record']['dump_path'], 
                     "enable_control" : data['msg_record']['enable_control'], 
 
-                    "control_enable_scan" : data['control_setting']['enable_scan'], 
-                    "control_enable_sample" : data['control_setting']['enable_sample'], 
-                    "control_enable_dump" : data['control_setting']['enable_dump'], 
-                    "control_enable_countdown" : data['control_setting']['enable_countdown'], 
-                    "control_scan_period_ms" : data['control_setting']['scan_period_ms'], 
-                    "control_sample_period_ms" : data['control_setting']['sample_period_ms'], 
-                    "control_dump_period_s" : data['control_setting']['dump_period_s'], 
-                    "control_countdown_duration_s" : data['control_setting']['countdown_duration_s'], 
-
                     "serviceName" : data['service_prop']['serviceName'] + '_' + str(data['generic_prop']['id']), 
 
                     # Settings for Params class under vehicle_interfaces/params.h
