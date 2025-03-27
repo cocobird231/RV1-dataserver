@@ -113,6 +113,7 @@ template<>
 void RecordMsgToJSON(nlohmann::json& json, const std::shared_ptr<RecordMsg<vehicle_interfaces::msg::GPS> > rMsg)
 {
     VI_HeaderToJSON(json, rMsg->msg_->header);
+    json["unit_type"] = rMsg->msg_->unit_type;
     json["gps_status"] = rMsg->msg_->gps_status;
     json["latitude"] = rMsg->msg_->latitude;
     json["longitude"] = rMsg->msg_->longitude;
